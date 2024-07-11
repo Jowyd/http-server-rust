@@ -97,10 +97,11 @@ fn handle_client(mut stream: TcpStream) -> Result<(), Box<dyn Error>> {
         .get(1)
         .unwrap();
 
+    println!("path: {}", path);
     if path == &"/" || path == &"/index.html" {
         stream.write(b"HTTP/1.1 200 OK\r\n\r\n")?;
     } else if path.starts_with("/echo/") {
-        let (_, data) = path.split_at(6);
+        let data = path.split_at(6).1;
         let response = Response {
             status_code: 200,
             status_message: "OK".to_string(),
