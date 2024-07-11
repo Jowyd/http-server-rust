@@ -194,7 +194,8 @@ impl Request {
             let file_name = self.path.replace("/files/", "");
             let mut dir = get_path();
             dir.push_str(&file_name);
-            let file_creation_result = fs::write(dir, self.body.as_bytes());
+
+            let file_creation_result = fs::write(dir, self.body.to_string());
             match file_creation_result {
                 Ok(()) => {
                     println!("created");
