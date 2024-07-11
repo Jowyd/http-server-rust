@@ -1,9 +1,10 @@
+use flate2::write::GzEncoder;
+use flate2::Compression;
 use std::error::Error;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::str::FromStr;
 use std::{default, fs, thread};
-
 #[allow(dead_code)]
 fn define_method(method: MethodType) {
     match method {
@@ -107,9 +108,29 @@ struct Response {
 
 impl Response {
     fn to_bytes(&self) -> Vec<u8> {
-        let header = format_header_response(&self);
-        let body = &self.body;
-        return format!("{}{}", header, body).as_bytes().to_vec();
+        let body_bytes = if self
+            .accept_encoding
+            .is_some_and(|encoding| encoding == Encoding::Gzip)
+        {
+            let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+            encoder.write_all(self.body.as_bytes()).unwrap();
+            encoder.finish().unwrap()
+        } else {
+            self.body.as_bytes().to_vec()
+        };
+
+        let mut header = format_header_response(&self);
+
+        if self
+            .accept_encoding
+            .is_some_and(|encoding| encoding == Encoding::Gzip)
+        {
+            header.push_str("Content-Encoding: gzip\r\n");
+        }
+
+        let mut response = header.into_bytes();
+        response.extend_from_slice(&body_bytes);
+        response
     }
 
     fn not_found() -> Response {
@@ -135,7 +156,7 @@ struct Request {
     body: String,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 enum Encoding {
     Gzip,
 }
