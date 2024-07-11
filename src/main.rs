@@ -126,12 +126,13 @@ fn handle_client(mut stream: TcpStream) -> Result<(), Box<dyn Error>> {
         let filename = path.split_at(7).1;
         println!("filename: {}", filename);
         let file_result = std::fs::read_to_string(filename);
+        println!("find file: {:?}", file_result.is_ok());
         match file_result {
             Ok(file) => {
                 let response = Response {
                     status_code: 200,
                     status_message: "OK".to_string(),
-                    content_type: ContentType::Text,
+                    content_type: ContentType::OctetStream,
                     body: file,
                 };
                 stream.write(&response.to_bytes())?;
