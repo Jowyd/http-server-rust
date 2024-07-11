@@ -123,6 +123,7 @@ fn handle_client(mut stream: TcpStream) -> Result<(), Box<dyn Error>> {
         stream.write(&response.to_bytes())?;
     } else if path.starts_with("/files/") {
         let filename = path.split_at(7).1;
+        println!("filename: {}", filename);
         let file_result = std::fs::read_to_string(filename);
         match file_result {
             Ok(file) => {
