@@ -31,7 +31,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     let (_, data) = path.split_at(6);
                     _stream.write(format!("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}", data.len(), data).as_bytes())?;
                 } else {
-                    _stream.write(b"HTTP/1.1 404 NOTFOUND\r\n\r\n")?;
+                    _stream.write(b"HTTP/1.1 404 Not Found\r\n\r\n")?;
                 }
             }
             Err(e) => {
