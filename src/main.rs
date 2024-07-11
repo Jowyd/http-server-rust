@@ -207,7 +207,7 @@ impl Request {
                         status_code: 201,
                         status_message: "Created".to_string(),
                         content_type: ContentType::Text,
-                        body: "File created".to_string(),
+                        body: "".to_string(),
                     }
                 }
                 Err(_) => Response {
