@@ -74,7 +74,7 @@ impl Response {
 #[allow(dead_code)]
 #[allow(unused_variables)]
 fn handle_client(mut stream: TcpStream) -> Result<(), Box<dyn Error>> {
-    println!("accepted new connection");
+    println!("accepted new connection from {}", stream.peer_addr()?);
     let mut buffer = [0; 1024];
     let _ = stream.read(&mut buffer[..])?;
     println!("received data:\n{}", String::from_utf8_lossy(&buffer[..]));
@@ -97,7 +97,6 @@ fn handle_client(mut stream: TcpStream) -> Result<(), Box<dyn Error>> {
         .get(1)
         .unwrap();
 
-    println!("path: {}", path);
     if path == &"/" || path == &"/index.html" {
         stream.write(b"HTTP/1.1 200 OK\r\n\r\n")?;
     } else if path.starts_with("/echo/") {
@@ -153,7 +152,6 @@ use std::env;
 fn main() -> Result<(), Box<dyn Error>> {
     // You can use print statements as follows for debugging, they'll be visible when running tests.
     println!("Logs from your program will appear here!");
-    println!("Current directory: {:?}", env::current_dir()?);
     let listener = TcpListener::bind("127.0.0.1:4221").unwrap();
 
     for stream in listener.incoming() {
