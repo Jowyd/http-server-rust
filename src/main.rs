@@ -28,7 +28,7 @@ enum MethodType {
 }
 
 impl From<&str> for MethodType {
-    fn from(method: &str) -> Self {
+    fn from(method: &str) -> MethodType {
         match method {
             "GET" => MethodType::GET,
             "POST" => MethodType::POST,
@@ -100,11 +100,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .get(1)
                     .unwrap();
 
-                let user_agent_line = lines
-                    .iter()
-                    .find(|line| line.starts_with("User-Agent: "))
-                    .expect("cannot find user agent");
-
                 if path == &"/" || path == &"/index.html" {
                     _stream.write(b"HTTP/1.1 200 OK\r\n\r\n")?;
                 } else if path.starts_with("/echo/") {
@@ -117,6 +112,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                     };
                     _stream.write(&response.to_bytes())?;
                 } else if path == &"/user-agent" {
+                    let user_agent_line = lines
+                        .iter()
+                        .find(|line| line.starts_with("User-Agent: "))
+                        .expect("cannot find user agent");
                     let (_, user_agent) = user_agent_line.split_at(12);
                     let response = Response {
                         status_code: 200,
