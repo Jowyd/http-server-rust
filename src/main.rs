@@ -11,14 +11,15 @@ fn define_method(method: MethodType) {
         MethodType::POST => println!("POST"),
         MethodType::PUT => println!("PUT"),
         MethodType::DELETE => println!("DELETE"),
-        _ => panic!("Method not supported"),
     }
 }
 
+#[allow(dead_code)]
 enum ContentType {
     Text,
     Html,
     Json,
+    OctetStream,
 }
 
 enum MethodType {
@@ -45,6 +46,7 @@ fn format_header_response(response: &Response) -> String {
         ContentType::Text => "text/plain",
         ContentType::Html => "text/html",
         ContentType::Json => "application/json",
+        ContentType::OctetStream => "application/octet-stream",
     };
     let content_length = response.body.len();
 
@@ -69,6 +71,8 @@ impl Response {
     }
 }
 
+#[allow(dead_code)]
+#[allow(unused_variables)]
 fn handle_client(mut stream: TcpStream) -> Result<(), Box<dyn Error>> {
     println!("accepted new connection");
     let mut buffer = [0; 1024];
@@ -117,16 +121,35 @@ fn handle_client(mut stream: TcpStream) -> Result<(), Box<dyn Error>> {
             body: user_agent.to_string(),
         };
         stream.write(&response.to_bytes())?;
+    } else if path.starts_with("/files/") {
+        let filename = path.split_at(7).1;
+        let file_result = std::fs::read_to_string(filename);
+        match file_result {
+            Ok(file) => {
+                let response = Response {
+                    status_code: 200,
+                    status_message: "OK".to_string(),
+                    content_type: ContentType::Text,
+                    body: file,
+                };
+                stream.write(&response.to_bytes())?;
+            }
+            Err(_) => {
+                stream.write(b"HTTP/1.1 404 Not Found\r\n\r\n")?;
+            }
+        }
     } else {
         stream.write(b"HTTP/1.1 404 Not Found\r\n\r\n")?;
     }
     Ok(())
 }
 
+use std::env;
+
 fn main() -> Result<(), Box<dyn Error>> {
     // You can use print statements as follows for debugging, they'll be visible when running tests.
     println!("Logs from your program will appear here!");
-
+    println!("Current directory: {:?}", env::current_dir()?);
     let listener = TcpListener::bind("127.0.0.1:4221").unwrap();
 
     for stream in listener.incoming() {
