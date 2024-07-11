@@ -195,9 +195,10 @@ impl Request {
             let mut dir = get_path();
             dir.push_str(&file_name);
             let file = fs::File::create(&dir);
-            match file {
-                Ok(mut file) => {
-                    file.write_all(self.body.as_bytes()).expect("write file");
+            let file_creation_result = fs::write(dir, self.body.trim_end_matches('\0'));
+            match file_creation_result {
+                Ok(()) => {
+                    println!("created");
                     Response {
                         status_code: 201,
                         status_message: "Created".to_string(),
