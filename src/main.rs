@@ -2,7 +2,7 @@ use std::error::Error;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::str::FromStr;
-use std::{fs, thread};
+use std::{default, fs, thread};
 
 #[allow(dead_code)]
 fn define_method(method: MethodType) {
@@ -20,6 +20,27 @@ enum ContentType {
     Html,
     Json,
     OctetStream,
+}
+
+impl ContentType {
+    fn from_extension(extension: &str) -> ContentType {
+        match extension {
+            "txt" => ContentType::Text,
+            "html" => ContentType::Html,
+            "json" => ContentType::Json,
+            "bin" => ContentType::OctetStream,
+            _ => ContentType::Text,
+        }
+    }
+
+    fn to_str(&self) -> &str {
+        match self {
+            ContentType::Text => "text/plain",
+            ContentType::Html => "text/html",
+            ContentType::Json => "application/json",
+            ContentType::OctetStream => "application/octet-stream",
+        }
+    }
 }
 
 enum MethodType {
@@ -56,17 +77,23 @@ impl FromStr for MethodType {
 }
 
 fn format_header_response(response: &Response) -> String {
-    let content_type = match response.content_type {
-        ContentType::Text => "text/plain",
-        ContentType::Html => "text/html",
-        ContentType::Json => "application/json",
-        ContentType::OctetStream => "application/octet-stream",
-    };
+    let content_type = response.content_type.to_str();
     let content_length = response.body.len();
+    let accept_encoding: &str = if response.accept_encoding.is_some() {
+        match response.accept_encoding.as_ref().unwrap() {
+            Encoding::Gzip => "Accept-Encoding: gzip\r\n",
+        }
+    } else {
+        ""
+    };
 
     return format!(
-        "HTTP/1.1 {} {}\r\nContent-Type: {}\r\nContent-length: {}\r\n\r\n",
-        response.status_code, response.status_message, content_type, content_length
+        "HTTP/1.1 {} {}\r\nContent-Type: {}\r\nContent-length: {}\r\n{}\r\n",
+        response.status_code,
+        response.status_message,
+        content_type,
+        content_length,
+        accept_encoding,
     );
 }
 
@@ -74,6 +101,7 @@ struct Response {
     status_code: u16,
     status_message: String,
     content_type: ContentType,
+    accept_encoding: Option<Encoding>,
     body: String,
 }
 
@@ -89,6 +117,7 @@ impl Response {
             status_code: 404,
             status_message: "Not Found".to_string(),
             content_type: ContentType::Text,
+            accept_encoding: None,
             body: "Not Found".to_string(),
         }
     }
@@ -102,7 +131,22 @@ struct Request {
     host: String,
     user_agent: String,
     accept: String,
+    accept_encoding: Option<Encoding>,
     body: String,
+}
+
+#[derive(Copy, Clone)]
+enum Encoding {
+    Gzip,
+}
+
+impl Encoding {
+    fn parse(s: &str) -> Option<Encoding> {
+        match s.to_lowercase().as_str() {
+            "gzip" => Some(Encoding::Gzip),
+            _ => None,
+        }
+    }
 }
 
 fn get_path() -> String {
@@ -134,6 +178,7 @@ impl Request {
         let mut accept = String::new();
         let mut body = String::new();
         let mut headers_ended = false;
+        let mut accept_encoding: Option<Encoding> = None;
 
         // Parse les en-têtes et le corps
         for line in lines {
@@ -151,6 +196,7 @@ impl Request {
                     "host" => host = header_value.to_string(),
                     "user-agent" => user_agent = header_value.to_string(),
                     "accept" => accept = header_value.to_string(),
+                    "accept-encoding" => accept_encoding = Encoding::parse(header_value),
                     _ => {} // Ignorer les autres en-têtes
                 }
             } else {
@@ -172,6 +218,7 @@ impl Request {
             host,
             user_agent,
             accept,
+            accept_encoding,
             body,
         })
     }
@@ -185,6 +232,7 @@ impl Request {
                 status_message: "Method Not Allowed".to_string(),
                 content_type: ContentType::Text,
                 body: "Method not allowed".to_string(),
+                accept_encoding: None,
             },
         }
     }
@@ -203,6 +251,7 @@ impl Request {
                         status_message: "Created".to_string(),
                         content_type: ContentType::Text,
                         body: "".to_string(),
+                        accept_encoding: self.accept_encoding,
                     }
                 }
                 Err(_) => Response {
@@ -210,6 +259,7 @@ impl Request {
                     status_message: "Creation Error".to_string(),
                     content_type: ContentType::Text,
                     body: "Error while creating the file".to_string(),
+                    accept_encoding: None,
                 },
             }
         } else {
@@ -224,6 +274,7 @@ impl Request {
                 status_message: "OK".to_string(),
                 content_type: ContentType::Html,
                 body: "".to_string(),
+                accept_encoding: self.accept_encoding,
             };
         } else if self.path.starts_with("/echo/") {
             let data = self.path.split_at(6).1;
@@ -232,6 +283,7 @@ impl Request {
                 status_message: "OK".to_string(),
                 content_type: ContentType::Text,
                 body: data.to_string(),
+                accept_encoding: self.accept_encoding,
             }
         } else if self.path == "/user-agent" {
             Response {
@@ -239,6 +291,7 @@ impl Request {
                 status_message: "OK".to_string(),
                 content_type: ContentType::Text,
                 body: self.user_agent.to_owned(),
+                accept_encoding: self.accept_encoding,
             }
         } else if self.path.starts_with("/files/") {
             let file_name = self.path.replace("/files", "");
@@ -251,12 +304,14 @@ impl Request {
                     status_message: "OK".to_string(),
                     content_type: ContentType::OctetStream,
                     body: String::from_utf8(file).expect("file content"),
+                    accept_encoding: self.accept_encoding,
                 },
                 Err(_) => Response {
                     status_code: 404,
                     status_message: "Not Found".to_string(),
                     content_type: ContentType::Text,
                     body: "Not Found".to_string(),
+                    accept_encoding: None,
                 },
             }
         } else {
