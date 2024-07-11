@@ -195,7 +195,7 @@ impl Request {
             let mut dir = get_path();
             dir.push_str(&file_name);
 
-            let file_creation_result = fs::write(dir, self.body.clone());
+            let file_creation_result = fs::write(dir, self.body.trim_end_matches('\0'));
             match file_creation_result {
                 Ok(()) => {
                     println!("created");
