@@ -103,7 +103,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let user_agent_line = lines
                     .iter()
                     .find(|line| line.starts_with("User-Agent: "))
-                    .unwrap();
+                    .expect("cannot find user agent");
 
                 if path == &"/" || path == &"/index.html" {
                     _stream.write(b"HTTP/1.1 200 OK\r\n\r\n")?;
