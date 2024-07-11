@@ -142,6 +142,17 @@ enum Encoding {
 
 impl Encoding {
     fn parse(s: &str) -> Option<Encoding> {
+        for part in s.to_lowercase().trim().split(",") {
+            let encode = part.trim();
+            let encoding = Encoding::parse_single(encode);
+            if encoding.is_some() {
+                return encoding;
+            }
+        }
+        None
+    }
+
+    fn parse_single(s: &str) -> Option<Encoding> {
         match s.to_lowercase().as_str() {
             "gzip" => Some(Encoding::Gzip),
             _ => None,
