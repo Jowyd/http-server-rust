@@ -2,7 +2,7 @@ use itertools::Itertools;
 use std::error::Error;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::thread;
+use std::{fs, thread};
 
 #[allow(dead_code)]
 fn define_method(method: MethodType) {
@@ -123,17 +123,18 @@ fn handle_client(mut stream: TcpStream) -> Result<(), Box<dyn Error>> {
         };
         stream.write(&response.to_bytes())?;
     } else if path.starts_with("/files/") {
-        let filename = path.split_at(7).1;
-        println!("filename: {}", filename);
-        let file_result = std::fs::read_to_string(filename);
-        println!("find file: {:?}", file_result.is_ok());
+        let file_name = path.replace("/files/", "");
+        let env_args: Vec<String> = env::args().collect();
+        let mut dir = env_args[2].clone();
+        dir.push_str(&file_name);
+        let file_result = fs::read(dir);
         match file_result {
             Ok(file) => {
                 let response = Response {
                     status_code: 200,
                     status_message: "OK".to_string(),
                     content_type: ContentType::OctetStream,
-                    body: file,
+                    body: String::from_utf8(file).expect("file content"),
                 };
                 stream.write(&response.to_bytes())?;
             }
