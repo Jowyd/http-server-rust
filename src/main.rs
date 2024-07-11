@@ -194,7 +194,6 @@ impl Request {
             let file_name = self.path.replace("/files/", "");
             let mut dir = get_path();
             dir.push_str(&file_name);
-            let file = fs::File::create(&dir);
             let file_creation_result = fs::write(dir, self.body.trim_end_matches('\0'));
             match file_creation_result {
                 Ok(()) => {
