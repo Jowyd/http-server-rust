@@ -81,7 +81,7 @@ fn format_header_response(response: &Response) -> String {
     let content_length = response.body.len();
     let accept_encoding: &str = if response.accept_encoding.is_some() {
         match response.accept_encoding.as_ref().unwrap() {
-            Encoding::Gzip => "Accept-Encoding: gzip\r\n",
+            Encoding::Gzip => "Content-Encoding: gzip\r\n",
         }
     } else {
         ""
