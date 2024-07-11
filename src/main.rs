@@ -1,4 +1,3 @@
-use itertools::Itertools;
 use std::error::Error;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -28,10 +27,6 @@ enum MethodType {
     POST,
     PUT,
     DELETE,
-}
-
-trait MethodHandler {
-    fn handle(&self, path: &str) -> Response;
 }
 
 impl From<&str> for MethodType {
@@ -99,6 +94,7 @@ impl Response {
     }
 }
 
+#[allow(dead_code)]
 struct Request {
     method: MethodType,
     path: String,
@@ -194,8 +190,7 @@ impl Request {
     }
 
     fn handle_post(&self) -> Response {
-        println!("POST ççççççççççççççççççbody: {}", self.body);
-        if (self.path.contains("/files/")) {
+        if self.path.contains("/files/") {
             let file_name = self.path.replace("/files/", "");
             let mut dir = get_path();
             dir.push_str(&file_name);
