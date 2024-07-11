@@ -109,6 +109,19 @@ struct Request {
     body: String,
 }
 
+fn get_path() -> String {
+    let env_args: Vec<String> = env::args().collect();
+    if env_args.len() < 3 {
+        return std::env::current_dir()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string();
+    } else {
+        return env_args[2].clone();
+    }
+}
+
 impl Request {
     fn parse(request: &str) -> Result<Request, String> {
         let mut lines = request.lines();
@@ -181,7 +194,32 @@ impl Request {
     }
 
     fn handle_post(&self) -> Response {
-        todo!()
+        println!("POST ççççççççççççççççççbody: {}", self.body);
+        if (self.path.contains("/files/")) {
+            let file_name = self.path.replace("/files/", "");
+            let mut dir = get_path();
+            dir.push_str(&file_name);
+            let file_creation_result = fs::write(dir, self.body.as_bytes());
+            match file_creation_result {
+                Ok(()) => {
+                    println!("created");
+                    Response {
+                        status_code: 201,
+                        status_message: "Created".to_string(),
+                        content_type: ContentType::Text,
+                        body: "File created".to_string(),
+                    }
+                }
+                Err(_) => Response {
+                    status_code: 500,
+                    status_message: "Creation Error".to_string(),
+                    content_type: ContentType::Text,
+                    body: "Error while creating the file".to_string(),
+                },
+            }
+        } else {
+            Response::not_found()
+        }
     }
 
     fn handle_get(&self) -> Response {
@@ -209,16 +247,7 @@ impl Request {
             }
         } else if self.path.starts_with("/files/") {
             let file_name = self.path.replace("/files", "");
-            let env_args: Vec<String> = env::args().collect();
-            let mut dir = if env_args.len() < 3 {
-                std::env::current_dir()
-                    .unwrap()
-                    .to_str()
-                    .unwrap()
-                    .to_string()
-            } else {
-                env_args[2].clone()
-            };
+            let mut dir = get_path();
             dir.push_str(&file_name);
             let file_result = fs::read(&dir);
             match file_result {
@@ -249,27 +278,12 @@ fn handle_client(mut stream: TcpStream) -> Result<(), Box<dyn Error>> {
     let _ = stream.read(&mut buffer[..])?;
     println!("received data:\n{}", String::from_utf8_lossy(&buffer[..]));
 
-    let request = String::from_utf8(buffer.into())?;
-    let lines = request.lines().collect_vec();
-    let start_line = lines.get(0).unwrap();
-    let split_start_line = start_line.split(' ').collect_vec();
-    let _method = split_start_line.get(0).unwrap().to_string();
-    let method_type: MethodType = _method.as_str().into();
-    let path = split_start_line.get(1).unwrap();
-    let _http_version = split_start_line.get(2).unwrap();
+    let request_str = String::from_utf8(buffer.into())?;
 
-    let request: Request = Request::parse(&request).expect("parse request");
+    let request: Request = Request::parse(&request_str).expect("parse request");
     let response = request.handle();
     stream.write(&response.to_bytes())?;
-
-    let host = lines
-        .iter()
-        .find(|line| line.starts_with("Host: "))
-        .unwrap()
-        .split(' ')
-        .collect_vec()
-        .get(1)
-        .unwrap();
+    stream.flush()?;
     Ok(())
 }
 
