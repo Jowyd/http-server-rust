@@ -2,6 +2,7 @@ use itertools::Itertools;
 use std::error::Error;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
+use std::str::FromStr;
 use std::{fs, thread};
 
 #[allow(dead_code)]
@@ -29,6 +30,10 @@ enum MethodType {
     DELETE,
 }
 
+trait MethodHandler {
+    fn handle(&self, path: &str) -> Response;
+}
+
 impl From<&str> for MethodType {
     fn from(method: &str) -> MethodType {
         match method {
@@ -37,6 +42,20 @@ impl From<&str> for MethodType {
             "PUT" => MethodType::PUT,
             "DELETE" => MethodType::DELETE,
             _ => panic!("Method not supported"),
+        }
+    }
+}
+
+impl FromStr for MethodType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_uppercase().as_str() {
+            "GET" => Ok(MethodType::GET),
+            "POST" => Ok(MethodType::POST),
+            "PUT" => Ok(MethodType::PUT),
+            "DELETE" => Ok(MethodType::DELETE),
+            _ => Err(format!("Invalid HTTP method: {}", s)),
         }
     }
 }
@@ -57,7 +76,7 @@ fn format_header_response(response: &Response) -> String {
 }
 
 struct Response {
-    status_code: u8,
+    status_code: u16,
     status_message: String,
     content_type: ContentType,
     body: String,
@@ -68,6 +87,157 @@ impl Response {
         let header = format_header_response(&self);
         let body = &self.body;
         return format!("{}{}", header, body).as_bytes().to_vec();
+    }
+
+    fn not_found() -> Response {
+        Response {
+            status_code: 404,
+            status_message: "Not Found".to_string(),
+            content_type: ContentType::Text,
+            body: "Not Found".to_string(),
+        }
+    }
+}
+
+struct Request {
+    method: MethodType,
+    path: String,
+    http_version: String,
+    host: String,
+    user_agent: String,
+    accept: String,
+    body: String,
+}
+
+impl Request {
+    fn parse(request: &str) -> Result<Request, String> {
+        let mut lines = request.lines();
+
+        // Parse la première ligne
+        let first_line = lines.next().ok_or("Request is empty")?;
+        let mut parts = first_line.split_whitespace();
+        let method = parts.next().ok_or("Missing method")?.parse()?;
+        let path = parts.next().ok_or("Missing path")?.to_string();
+        let http_version = parts.next().ok_or("Missing HTTP version")?.to_string();
+
+        let mut host = String::new();
+        let mut user_agent = String::new();
+        let mut accept = String::new();
+        let mut body = String::new();
+        let mut headers_ended = false;
+
+        // Parse les en-têtes et le corps
+        for line in lines {
+            if line.is_empty() && !headers_ended {
+                headers_ended = true;
+                continue;
+            }
+
+            if !headers_ended {
+                let mut header_parts = line.splitn(2, ": ");
+                let header_name = header_parts.next().unwrap_or("");
+                let header_value = header_parts.next().unwrap_or("");
+
+                match header_name.to_lowercase().as_str() {
+                    "host" => host = header_value.to_string(),
+                    "user-agent" => user_agent = header_value.to_string(),
+                    "accept" => accept = header_value.to_string(),
+                    _ => {} // Ignorer les autres en-têtes
+                }
+            } else {
+                // Ajouter la ligne au corps
+                body.push_str(line);
+                body.push('\n');
+            }
+        }
+
+        // Supprimer le dernier caractère newline du corps s'il existe
+        if body.ends_with('\n') {
+            body.pop();
+        }
+
+        Ok(Request {
+            method,
+            path,
+            http_version,
+            host,
+            user_agent,
+            accept,
+            body,
+        })
+    }
+
+    fn handle(&self) -> Response {
+        match self.method {
+            MethodType::GET => self.handle_get(),
+            MethodType::POST => self.handle_post(),
+            _ => Response {
+                status_code: 405,
+                status_message: "Method Not Allowed".to_string(),
+                content_type: ContentType::Text,
+                body: "Method not allowed".to_string(),
+            },
+        }
+    }
+
+    fn handle_post(&self) -> Response {
+        todo!()
+    }
+
+    fn handle_get(&self) -> Response {
+        if self.path.as_str() == "/" || self.path.as_str() == "/index.html" {
+            return Response {
+                status_code: 200,
+                status_message: "OK".to_string(),
+                content_type: ContentType::Html,
+                body: "".to_string(),
+            };
+        } else if self.path.starts_with("/echo/") {
+            let data = self.path.split_at(6).1;
+            Response {
+                status_code: 200,
+                status_message: "OK".to_string(),
+                content_type: ContentType::Text,
+                body: data.to_string(),
+            }
+        } else if self.path == "/user-agent" {
+            Response {
+                status_code: 200,
+                status_message: "OK".to_string(),
+                content_type: ContentType::Text,
+                body: self.user_agent.to_owned(),
+            }
+        } else if self.path.starts_with("/files/") {
+            let file_name = self.path.replace("/files", "");
+            let env_args: Vec<String> = env::args().collect();
+            let mut dir = if env_args.len() < 3 {
+                std::env::current_dir()
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .to_string()
+            } else {
+                env_args[2].clone()
+            };
+            dir.push_str(&file_name);
+            let file_result = fs::read(&dir);
+            match file_result {
+                Ok(file) => Response {
+                    status_code: 200,
+                    status_message: "OK".to_string(),
+                    content_type: ContentType::OctetStream,
+                    body: String::from_utf8(file).expect("file content"),
+                },
+                Err(_) => Response {
+                    status_code: 404,
+                    status_message: "Not Found".to_string(),
+                    content_type: ContentType::Text,
+                    body: "Not Found".to_string(),
+                },
+            }
+        } else {
+            Response::not_found()
+        }
     }
 }
 
@@ -88,6 +258,10 @@ fn handle_client(mut stream: TcpStream) -> Result<(), Box<dyn Error>> {
     let path = split_start_line.get(1).unwrap();
     let _http_version = split_start_line.get(2).unwrap();
 
+    let request: Request = Request::parse(&request).expect("parse request");
+    let response = request.handle();
+    stream.write(&response.to_bytes())?;
+
     let host = lines
         .iter()
         .find(|line| line.starts_with("Host: "))
@@ -96,54 +270,6 @@ fn handle_client(mut stream: TcpStream) -> Result<(), Box<dyn Error>> {
         .collect_vec()
         .get(1)
         .unwrap();
-
-    if path == &"/" || path == &"/index.html" {
-        stream.write(b"HTTP/1.1 200 OK\r\n\r\n")?;
-    } else if path.starts_with("/echo/") {
-        let data = path.split_at(6).1;
-        let response = Response {
-            status_code: 200,
-            status_message: "OK".to_string(),
-            content_type: ContentType::Text,
-            body: data.to_string(),
-        };
-        stream.write(&response.to_bytes())?;
-    } else if path == &"/user-agent" {
-        let user_agent_line = lines
-            .iter()
-            .find(|line| line.starts_with("User-Agent: "))
-            .expect("cannot find user agent");
-        let (_, user_agent) = user_agent_line.split_at(12);
-        let response = Response {
-            status_code: 200,
-            status_message: "OK".to_string(),
-            content_type: ContentType::Text,
-            body: user_agent.to_string(),
-        };
-        stream.write(&response.to_bytes())?;
-    } else if path.starts_with("/files/") {
-        let file_name = path.replace("/files/", "");
-        let env_args: Vec<String> = env::args().collect();
-        let mut dir = env_args[2].clone();
-        dir.push_str(&file_name);
-        let file_result = fs::read(dir);
-        match file_result {
-            Ok(file) => {
-                let response = Response {
-                    status_code: 200,
-                    status_message: "OK".to_string(),
-                    content_type: ContentType::OctetStream,
-                    body: String::from_utf8(file).expect("file content"),
-                };
-                stream.write(&response.to_bytes())?;
-            }
-            Err(_) => {
-                stream.write(b"HTTP/1.1 404 Not Found\r\n\r\n")?;
-            }
-        }
-    } else {
-        stream.write(b"HTTP/1.1 404 Not Found\r\n\r\n")?;
-    }
     Ok(())
 }
 
