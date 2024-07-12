@@ -104,21 +104,19 @@ struct Response {
     status_message: String,
     content_type: ContentType,
     accept_encoding: Option<Encoding>,
-    body: String,
+    body: Vec<u8>,
 }
 
 impl Response {
-    fn to_bytes(&self) -> Vec<u8> {
-        let body_bytes = if self
+    fn to_bytes(&mut self) -> Vec<u8> {
+        if self
             .accept_encoding
             .is_some_and(|encoding| encoding == Encoding::Gzip)
         {
             let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-            encoder.write_all(self.body.as_bytes()).unwrap();
-            encoder.finish().unwrap()
-        } else {
-            self.body.as_bytes().to_vec()
-        };
+            encoder.write_all(&self.body).unwrap();
+            self.body = encoder.finish().unwrap();
+        }
 
         // let mut header = format_header_response(&self);
 
@@ -134,7 +132,7 @@ impl Response {
         // response
         let header = format_header_response(&self);
         let mut result: Vec<u8> = format!("{}", header).as_bytes().to_vec();
-        result.extend_from_slice(&body_bytes);
+        result.extend_from_slice(&self.body);
         return result;
     }
 
@@ -144,7 +142,7 @@ impl Response {
             status_message: "Not Found".to_string(),
             content_type: ContentType::Text,
             accept_encoding: None,
-            body: "Not Found".to_string(),
+            body: "Not Found".to_string().as_bytes().to_vec(),
         }
     }
 }
@@ -268,7 +266,7 @@ impl Request {
                 status_code: 405,
                 status_message: "Method Not Allowed".to_string(),
                 content_type: ContentType::Text,
-                body: "Method not allowed".to_string(),
+                body: "Method not allowed".as_bytes().to_vec(),
                 accept_encoding: None,
             }
             .to_bytes(),
@@ -289,7 +287,7 @@ impl Request {
                         status_code: 201,
                         status_message: "Created".to_string(),
                         content_type: ContentType::Text,
-                        body: "".to_string(),
+                        body: "".as_bytes().to_vec(),
                         accept_encoding: self.accept_encoding,
                     }
                     .to_bytes()
@@ -298,7 +296,7 @@ impl Request {
                     status_code: 500,
                     status_message: "Creation Error".to_string(),
                     content_type: ContentType::Text,
-                    body: "Error while creating the file".to_string(),
+                    body: "Error while creating the file".as_bytes().to_vec(),
                     accept_encoding: None,
                 }
                 .to_bytes(),
@@ -314,7 +312,7 @@ impl Request {
                 status_code: 200,
                 status_message: "OK".to_string(),
                 content_type: ContentType::Html,
-                body: "".to_string(),
+                body: "".as_bytes().to_vec(),
                 accept_encoding: self.accept_encoding,
             }
             .to_bytes();
@@ -324,7 +322,7 @@ impl Request {
                 status_code: 200,
                 status_message: "OK".to_string(),
                 content_type: ContentType::Text,
-                body: data.to_string(),
+                body: data.as_bytes().to_vec(),
                 accept_encoding: self.accept_encoding,
             }
             .to_bytes()
@@ -333,7 +331,7 @@ impl Request {
                 status_code: 200,
                 status_message: "OK".to_string(),
                 content_type: ContentType::Text,
-                body: self.user_agent.to_owned(),
+                body: self.user_agent.as_bytes().to_owned(),
                 accept_encoding: self.accept_encoding,
             }
             .to_bytes()
@@ -347,7 +345,7 @@ impl Request {
                     status_code: 200,
                     status_message: "OK".to_string(),
                     content_type: ContentType::OctetStream,
-                    body: String::from_utf8(file).expect("file content"),
+                    body: file,
                     accept_encoding: self.accept_encoding,
                 }
                 .to_bytes(),
@@ -355,7 +353,7 @@ impl Request {
                     status_code: 404,
                     status_message: "Not Found".to_string(),
                     content_type: ContentType::Text,
-                    body: "Not Found".to_string(),
+                    body: "Not Found".as_bytes().to_vec(),
                     accept_encoding: None,
                 }
                 .to_bytes(),
