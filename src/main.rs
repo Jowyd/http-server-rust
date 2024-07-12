@@ -279,7 +279,7 @@ impl Request {
             let mut dir = get_path();
             dir.push_str(&file_name);
             let file_creation_result =
-                fs::write(dir, String::from_utf8_lossy(&self.body).to_string());
+                fs::write(dir, String::from_utf8_lossy(&self.body).to_string().trim());
             match file_creation_result {
                 Ok(()) => {
                     println!("created");
