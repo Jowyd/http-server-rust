@@ -278,20 +278,21 @@ impl Request {
             let file_name = self.path.replace("/files/", "");
             let mut dir = get_path();
             dir.push_str(&file_name);
-            let file_creation_result =
-                fs::write(dir, String::from_utf8_lossy(&self.body).to_string().trim());
+            let file_creation_result = fs::write(
+                dir,
+                String::from_utf8_lossy(&self.body)
+                    .to_string()
+                    .trim_end_matches('\0'),
+            );
             match file_creation_result {
-                Ok(()) => {
-                    println!("created");
-                    Response {
-                        status_code: 201,
-                        status_message: "Created".to_string(),
-                        content_type: ContentType::Text,
-                        body: "".as_bytes().to_vec(),
-                        accept_encoding: self.accept_encoding,
-                    }
-                    .to_bytes()
+                Ok(()) => Response {
+                    status_code: 201,
+                    status_message: "Created".to_string(),
+                    content_type: ContentType::Text,
+                    body: "".as_bytes().to_vec(),
+                    accept_encoding: self.accept_encoding,
                 }
+                .to_bytes(),
                 Err(_) => Response {
                     status_code: 500,
                     status_message: "Creation Error".to_string(),
