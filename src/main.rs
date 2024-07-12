@@ -16,6 +16,7 @@ fn define_method(method: MethodType) {
 }
 
 #[allow(dead_code)]
+#[derive(Copy, Clone)]
 enum ContentType {
     Text,
     Html,
@@ -119,18 +120,22 @@ impl Response {
             self.body.as_bytes().to_vec()
         };
 
-        let mut header = format_header_response(&self);
+        // let mut header = format_header_response(&self);
 
-        if self
-            .accept_encoding
-            .is_some_and(|encoding| encoding == Encoding::Gzip)
-        {
-            header.push_str("Content-Encoding: gzip\r\n");
-        }
+        // if self
+        //     .accept_encoding
+        //     .is_some_and(|encoding| encoding == Encoding::Gzip)
+        // {
+        //     header.push_str("Content-Encoding: gzip\r\n");
+        // }
 
-        let mut response = header.into_bytes();
-        response.extend_from_slice(&body_bytes);
-        response
+        // let mut response = header.into_bytes();
+        // response.extend_from_slice(&body_bytes);
+        // response
+        let header = format_header_response(&self);
+        let mut result: Vec<u8> = format!("{}", header).as_bytes().to_vec();
+        result.extend_from_slice(&body_bytes);
+        return result;
     }
 
     fn not_found() -> Response {
@@ -153,7 +158,7 @@ struct Request {
     user_agent: String,
     accept: String,
     accept_encoding: Option<Encoding>,
-    body: String,
+    body: Vec<u8>,
 }
 
 #[derive(Copy, Clone, PartialEq)]
@@ -251,11 +256,11 @@ impl Request {
             user_agent,
             accept,
             accept_encoding,
-            body,
+            body: body.as_bytes().to_vec(),
         })
     }
 
-    fn handle(&self) -> Response {
+    fn handle(&self) -> Vec<u8> {
         match self.method {
             MethodType::GET => self.handle_get(),
             MethodType::POST => self.handle_post(),
@@ -265,16 +270,18 @@ impl Request {
                 content_type: ContentType::Text,
                 body: "Method not allowed".to_string(),
                 accept_encoding: None,
-            },
+            }
+            .to_bytes(),
         }
     }
 
-    fn handle_post(&self) -> Response {
+    fn handle_post(&self) -> Vec<u8> {
         if self.path.contains("/files/") {
             let file_name = self.path.replace("/files/", "");
             let mut dir = get_path();
             dir.push_str(&file_name);
-            let file_creation_result = fs::write(dir, self.body.trim_end_matches('\0'));
+            let file_creation_result =
+                fs::write(dir, String::from_utf8_lossy(&self.body).to_string());
             match file_creation_result {
                 Ok(()) => {
                     println!("created");
@@ -285,6 +292,7 @@ impl Request {
                         body: "".to_string(),
                         accept_encoding: self.accept_encoding,
                     }
+                    .to_bytes()
                 }
                 Err(_) => Response {
                     status_code: 500,
@@ -292,14 +300,15 @@ impl Request {
                     content_type: ContentType::Text,
                     body: "Error while creating the file".to_string(),
                     accept_encoding: None,
-                },
+                }
+                .to_bytes(),
             }
         } else {
-            Response::not_found()
+            Response::not_found().to_bytes()
         }
     }
 
-    fn handle_get(&self) -> Response {
+    fn handle_get(&self) -> Vec<u8> {
         if self.path.as_str() == "/" || self.path.as_str() == "/index.html" {
             return Response {
                 status_code: 200,
@@ -307,7 +316,8 @@ impl Request {
                 content_type: ContentType::Html,
                 body: "".to_string(),
                 accept_encoding: self.accept_encoding,
-            };
+            }
+            .to_bytes();
         } else if self.path.starts_with("/echo/") {
             let data = self.path.split_at(6).1;
             Response {
@@ -317,6 +327,7 @@ impl Request {
                 body: data.to_string(),
                 accept_encoding: self.accept_encoding,
             }
+            .to_bytes()
         } else if self.path == "/user-agent" {
             Response {
                 status_code: 200,
@@ -325,6 +336,7 @@ impl Request {
                 body: self.user_agent.to_owned(),
                 accept_encoding: self.accept_encoding,
             }
+            .to_bytes()
         } else if self.path.starts_with("/files/") {
             let file_name = self.path.replace("/files", "");
             let mut dir = get_path();
@@ -337,17 +349,19 @@ impl Request {
                     content_type: ContentType::OctetStream,
                     body: String::from_utf8(file).expect("file content"),
                     accept_encoding: self.accept_encoding,
-                },
+                }
+                .to_bytes(),
                 Err(_) => Response {
                     status_code: 404,
                     status_message: "Not Found".to_string(),
                     content_type: ContentType::Text,
                     body: "Not Found".to_string(),
                     accept_encoding: None,
-                },
+                }
+                .to_bytes(),
             }
         } else {
-            Response::not_found()
+            Response::not_found().to_bytes()
         }
     }
 }
@@ -363,8 +377,7 @@ fn handle_client(mut stream: TcpStream) -> Result<(), Box<dyn Error>> {
     let request_str = String::from_utf8(buffer.into())?;
 
     let request: Request = Request::parse(&request_str).expect("parse request");
-    let response = request.handle();
-    stream.write(&response.to_bytes())?;
+    stream.write(&request.handle())?;
     stream.flush()?;
     Ok(())
 }
